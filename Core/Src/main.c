@@ -85,8 +85,8 @@ SRAM_HandleTypeDef hsram1;
 RTC_TimeTypeDef gTime;
 RTC_DateTypeDef gDate;
 modbusHandler_t ModbusHandler;
-uint16_t ModbusDATARX[50];  // Adjust the size as needed
-bool ModbusCoil[40];
+//uint16_t ModbusDATARX[45];  // Adjust the size as needed
+//bool ModbusCoil[31];
 uint32_t startupAction = 0; //initial setup
 
 volatile bool proximityDetect = NO_MOVEMENT;

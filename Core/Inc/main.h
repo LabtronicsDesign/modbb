@@ -44,8 +44,8 @@ extern RTC_HandleTypeDef hrtc;
 extern I2C_HandleTypeDef hi2c1;
 
 extern modbusHandler_t ModbusHandler; // Modbus handler structure
-extern uint16_t ModbusDATARX[50];
-extern bool ModbusCoil[40];
+//extern uint16_t ModbusDATARX[45];
+//extern bool ModbusCoil[31];
 
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart3;
