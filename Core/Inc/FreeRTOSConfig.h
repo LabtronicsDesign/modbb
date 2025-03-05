@@ -1,6 +1,6 @@
 /* USER CODE BEGIN Header */
 /*
- * FreeRTOS Kernel V10.4.6
+ * FreeRTOS Kernel V10.2.1
  * Portion Copyright (C) 2017 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  * Portion Copyright (C) 2019 StMicroelectronics, Inc.  All Rights Reserved.
  *
@@ -172,6 +172,7 @@ header file. */
 /* USER CODE END 2 */
 
 /* USER CODE BEGIN Defines */
+#define configAPPLICATION_ALLOCATED_HEAP 1
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
 /* USER CODE END Defines */
 

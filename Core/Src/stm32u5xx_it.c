@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2023 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -77,7 +77,7 @@ void NMI_Handler(void)
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-   while (1)
+  while (1)
   {
   }
   /* USER CODE END NonMaskableInt_IRQn 1 */
@@ -89,7 +89,11 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+	__disable_irq();
+	    printf("Error occurred\n"); // Basic message
+	//    while (1);
+	//    __BKPT();
+		NVIC_SystemReset(); // Trigger a soft reset
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -104,6 +108,11 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+	__disable_irq();
+	    printf("Error occurred\n"); // Basic message
+	//    while (1);
+	//    __BKPT();
+		NVIC_SystemReset(); // Trigger a soft reset
 
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)

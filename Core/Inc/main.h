@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2022 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -44,8 +44,6 @@ extern RTC_HandleTypeDef hrtc;
 extern I2C_HandleTypeDef hi2c1;
 
 extern modbusHandler_t ModbusHandler; // Modbus handler structure
-//extern uint16_t ModbusDATARX[45];
-//extern bool ModbusCoil[31];
 
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart3;

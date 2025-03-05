@@ -775,7 +775,6 @@ void StartTaskModbusMaster(void *argument)
 	  continue;
 	 }
 
-
 }
 
 /**
@@ -832,28 +831,51 @@ void get_FC3(modbusHandler_t *modH)
  */
 uint8_t validateAnswer(modbusHandler_t *modH)
 {
-    // check message crc vs calculated crc
+    // Print buffer size and hex dump of message
+//    printf("\r\n[DEBUG] Message size: %d bytes | Data: ", modH->u8BufferSize);
+//    for(int i = 0; i < modH->u8BufferSize; i++) {
+//        printf("%02X ", modH->u8Buffer[i]);
+//    }
+//    printf("\r\n");
 
-	uint16_t u16MsgCRC =
-        ((modH->u8Buffer[modH->u8BufferSize - 2] << 8)
-         | modH->u8Buffer[modH->u8BufferSize - 1]); // combine the crc Low & High bytes
-    if ( calcCRC(modH->u8Buffer,  modH->u8BufferSize-2) != u16MsgCRC )
+    // Check message CRC vs calculated CRC
+    uint16_t u16MsgCRC = ((modH->u8Buffer[modH->u8BufferSize - 2] << 8)
+                        | modH->u8Buffer[modH->u8BufferSize - 1]); // combine the crc Low & High bytes
+    uint16_t calculatedCRC = calcCRC(modH->u8Buffer, modH->u8BufferSize-2);
+
+//    printf("[DEBUG] Received CRC: 0x%04X, Calculated CRC: 0x%04X\r\n", u16MsgCRC, calculatedCRC);
+
+    if (calculatedCRC != u16MsgCRC)
     {
-    	modH->u16errCnt ++;
+        modH->u16errCnt++;
+        printf("\r\n[DEBUG] Message size: %d bytes | Data: ", modH->u8BufferSize);
+        for(int i = 0; i < modH->u8BufferSize; i++) {
+                printf("%02X ", modH->u8Buffer[i]);
+            }
+            printf("\r\n");
+        printf("[DEBUG] Received CRC: 0x%04X, Calculated CRC: 0x%04X\r\n", u16MsgCRC, calculatedCRC);
+        printf("[ERROR] CRC mismatch - Error count: %d\r\n", modH->u16errCnt);
         return ERR_BAD_CRC;
     }
 
-
-    // check exception
-    if ((modH->u8Buffer[ FUNC ] & 0x80) != 0)
+    // Rest of the validation function...
+    // Check exception
+    if ((modH->u8Buffer[FUNC] & 0x80) != 0)
     {
-    	modH->u16errCnt ++;
+        modH->u16errCnt++;
+        printf("\r\n[DEBUG] Message size: %d bytes | Data: ", modH->u8BufferSize);
+        for(int i = 0; i < modH->u8BufferSize; i++) {
+                printf("%02X ", modH->u8Buffer[i]);
+            }
+            printf("\r\n");
+		printf("[DEBUG] Received CRC: 0x%04X, Calculated CRC: 0x%04X\r\n", u16MsgCRC, calculatedCRC);
+        printf("[ERROR] Exception received: 0x%02X\r\n", modH->u8Buffer[2]);
         return ERR_EXCEPTION;
     }
 
-    // check fct code
+    // Check function code
     bool isSupported = false;
-    for (uint8_t i = 0; i< sizeof( fctsupported ); i++)
+    for (uint8_t i = 0; i < sizeof(fctsupported); i++)
     {
         if (fctsupported[i] == modH->u8Buffer[FUNC])
         {
@@ -863,10 +885,18 @@ uint8_t validateAnswer(modbusHandler_t *modH)
     }
     if (!isSupported)
     {
-    	modH->u16errCnt ++;
+        modH->u16errCnt++;
+        printf("\r\n[DEBUG] Message size: %d bytes | Data: ", modH->u8BufferSize);
+        for(int i = 0; i < modH->u8BufferSize; i++) {
+                printf("%02X ", modH->u8Buffer[i]);
+            }
+            printf("\r\n");
+		printf("[DEBUG] Received CRC: 0x%04X, Calculated CRC: 0x%04X\r\n", u16MsgCRC, calculatedCRC);
+        printf("[ERROR] Unsupported function code: 0x%02X\r\n", modH->u8Buffer[FUNC]);
         return EXC_FUNC_CODE;
     }
 
+//    printf("[DEBUG] Message validation passed\r\n");
     return 0; // OK, no exception code thrown
 }
 

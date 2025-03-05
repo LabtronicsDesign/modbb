@@ -2,7 +2,7 @@
 #define BIBOBUTTONCONTROLLER_HPP_
 
 
-//#include <platform/driver/button/ButtonController.hpp>
+#include <platform/driver/button/ButtonController.hpp>
 #include "main.h"
 
  extern "C" {
@@ -23,14 +23,14 @@ void ProgramChange(uint8_t channel, uint8_t program);
 void audioClickResponse();
 
 
-//class BIBOButtonController: public touchgfx:: ButtonController
-//{
-//	public:
-//		virtual void init();
-//		virtual bool sample(uint8_t& key);
-//	private:
-//		uint8_t previousState;
-//
-//};
+class BIBOButtonController: public touchgfx:: ButtonController
+{
+	public:
+		virtual void init();
+		virtual bool sample(uint8_t& key);
+	private:
+		uint8_t previousState;
+
+};
 
 #endif /* BIBOBUTTONCONTROLLER_HPP_*/

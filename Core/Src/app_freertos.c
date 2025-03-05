@@ -62,10 +62,18 @@ const osMessageQueueAttr_t myQueue01_attributes = { .name = "myQueue01" };
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = { .name = "defaultTask", .priority = (osPriority_t) osPriorityNormal, .stack_size = 384 * 4 };
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 384 * 4
+};
 /* Definitions for buttonTask */
 osThreadId_t buttonTaskHandle;
-const osThreadAttr_t buttonTask_attributes = { .name = "buttonTask", .priority = (osPriority_t) osPriorityLow, .stack_size = 64 * 4 };
+const osThreadAttr_t buttonTask_attributes = {
+  .name = "buttonTask",
+  .priority = (osPriority_t) osPriorityLow,
+  .stack_size = 64 * 4
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -108,44 +116,44 @@ __weak unsigned long getRunTimeCounterValue(void) {
 /* USER CODE END 1 */
 
 /**
- * @brief  FreeRTOS initialization
- * @param  None
- * @retval None
- */
+  * @brief  FreeRTOS initialization
+  * @param  None
+  * @retval None
+  */
 void MX_FREERTOS_Init(void) {
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* USER CODE BEGIN RTOS_MUTEX */
+  /* USER CODE BEGIN RTOS_MUTEX */
 	/* add mutexes, ... */
-	/* USER CODE END RTOS_MUTEX */
+  /* USER CODE END RTOS_MUTEX */
 
-	/* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
 	/* add semaphores, ... */
-	/* USER CODE END RTOS_SEMAPHORES */
+  /* USER CODE END RTOS_SEMAPHORES */
 
-	/* USER CODE BEGIN RTOS_TIMERS */
+  /* USER CODE BEGIN RTOS_TIMERS */
 	/* start timers, add new ones, ... */
-	/* USER CODE END RTOS_TIMERS */
+  /* USER CODE END RTOS_TIMERS */
 
-	/* USER CODE BEGIN RTOS_QUEUES */
+  /* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
 	myQueue01Handle = osMessageQueueNew(8, sizeof(dispenseAddressValuePair), &myQueue01_attributes);
-	/* USER CODE END RTOS_QUEUES */
-	/* creation of defaultTask */
-	defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* USER CODE END RTOS_QUEUES */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-	/* creation of buttonTask */
-	buttonTaskHandle = osThreadNew(StartButtonTask, NULL, &buttonTask_attributes);
+  /* creation of buttonTask */
+  buttonTaskHandle = osThreadNew(StartButtonTask, NULL, &buttonTask_attributes);
 
-	/* USER CODE BEGIN RTOS_THREADS */
+  /* USER CODE BEGIN RTOS_THREADS */
 	/* add threads, ... */
-	/* USER CODE END RTOS_THREADS */
+  /* USER CODE END RTOS_THREADS */
 
-	/* USER CODE BEGIN RTOS_EVENTS */
+  /* USER CODE BEGIN RTOS_EVENTS */
 	/* add events, ... */
-	/* USER CODE END RTOS_EVENTS */
+  /* USER CODE END RTOS_EVENTS */
 
 }
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -155,8 +163,9 @@ void MX_FREERTOS_Init(void) {
  * @retval None
  */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument) {
-	/* USER CODE BEGIN defaultTask */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN defaultTask */
 	/* Initialize data manager and memory monitor */
 		ModbusDataManager_Init();
 		MemoryMonitor_Init();
@@ -175,7 +184,7 @@ void StartDefaultTask(void *argument) {
 		ModbusHandler.uModbusType = MB_MASTER;
 		ModbusHandler.port = &huart3;
 		ModbusHandler.u8id = 0; // Master ID
-		ModbusHandler.u16timeOut = 1000;
+		ModbusHandler.u16timeOut = 2000;
 		ModbusHandler.EN_Port = NULL; // No RS485
 
 		// Use the static buffer for Modbus library's internal use
@@ -224,18 +233,16 @@ void StartDefaultTask(void *argument) {
 				/* Track memory for dispense operations */
 				MemoryMonitor_StartTracking("DispensingOperation");
 
-				ReadModbusData(1, ADD_CUP_DETECTION_1, 6);  // Read 13 coils starting from address 31
+				ReadModbusData(1, ADD_CUP_DETECTION_1, 6);  // Read 6 coils starting from address 31
 				bool tempCoils[6];
 				for (int i = 0; i < 6; i++)
 				{
-					tempCoils[i] = bitRead(ModbusDATARX[48], i);
+					tempCoils[i] = ModbusDataManager_GetCoil(CUP_DETECTION_1 + i);
 				}
 				/* Update coils in the data manager */
 				ModbusDataManager_UpdateCoilsBulk(CUP_DETECTION_1, tempCoils, 6);
 
-				ReadModbusData(4, ADD_REMAINING_FLOW_RATE_ML, 1);  // Reading addresses 30010-30018
-				/* Update data in the data manager */
-				ModbusDataManager_SetData(REMAINING_FLOW_RATE_ML, ModbusDATARX[REMAINING_FLOW_RATE_ML]);
+				ReadModbusData(4, ADD_REMAINING_FLOW_RATE_ML, 1);  // Reading address 30017
 
 				static uint8_t counter = 0;
 				counter++;
@@ -244,8 +251,8 @@ void StartDefaultTask(void *argument) {
 					ReadModbusData(1, ADD_HOT_WATER_RESET, 7);
 					bool tempResetCoils[7];
 					for (int i = 0; i < 7; i++) {
-						if ((i + HOT_WATER_RESET) < sizeof(ModbusCoil)/sizeof(ModbusCoil[0])) {
-							tempResetCoils[i] = bitRead(ModbusDATARX[45], i);
+						if ((i + HOT_WATER_RESET) < MAX_MODBUS_COIL_SIZE) {
+							tempResetCoils[i] = ModbusDataManager_GetCoil(HOT_WATER_RESET + i);
 						}
 					}
 					/* Update coils in the data manager */
@@ -294,7 +301,7 @@ void StartDefaultTask(void *argument) {
 
 			osDelay(100);
 		}
-	/* USER CODE END defaultTask */
+  /* USER CODE END defaultTask */
 }
 
 /* USER CODE BEGIN Header_StartButtonTask */
@@ -304,8 +311,9 @@ void StartDefaultTask(void *argument) {
  * @retval None
  */
 /* USER CODE END Header_StartButtonTask */
-void StartButtonTask(void *argument) {
-	/* USER CODE BEGIN buttonTask */
+void StartButtonTask(void *argument)
+{
+  /* USER CODE BEGIN buttonTask */
 	// Track if we need to send a stop command next
 	bool needStopCommand = false;
 
@@ -332,71 +340,71 @@ void StartButtonTask(void *argument) {
 			}
 		}
 
-		// Check for button press (assuming you have a function or variable to detect single press)
-		// For example, if you have a buttonPressed flag that's set elsewhere when button is pressed and released
-		if (User_ButtonState == BUTTON_PRESSED && !needStopCommand) {
-			// Button pressed, send a random dispense command
-			dispenseAddressValuePair command;
-
-			// Generate a random number between 0 and 2 to select which command to send
-			static uint32_t randomSeed = 0;
-			randomSeed++;
-			uint32_t randomCmd = randomSeed % 3;
-
-			switch (randomCmd) {
-				case 0:
-					// Hot water command
-					command.address = 40001;
-					command.buffer[0] = 0xff00;
-					command.buffer[1] = 200;
-					command.size = 2;
-					break;
-
-				case 1:
-					// Cold water command
-					command.address = 40004;
-					command.buffer[0] = 0xff00;
-					command.buffer[1] = 300;
-					command.size = 2;
-					break;
-
-				case 2:
-					// Mixed water command
-					command.address = 40006;
-					command.buffer[0] = 0xff00;
-					command.buffer[1] = 500;
-					command.buffer[2] = 35;
-					command.size = 3;
-					break;
-			}
-
-			// Send command to queue
-			osMessageQueuePut(myQueue01Handle, &command, 0, 0);
-
-			// Set flag to send stop command next
-			needStopCommand = true;
-
-			// Clear button state
-			User_ButtonState = BUTTON_IDLE;
-		} else if (User_ButtonState == BUTTON_PRESSED && needStopCommand) {
-			// Need to send stop command
-			dispenseAddressValuePair stopCommand = { .address = 40001, .buffer = { 0, 0, 0, 0, 0, 0, 0, 0 }, .size = 8 };
-
-			// Send stop command to queue
-			osMessageQueuePut(myQueue01Handle, &stopCommand, 0, 0);
-
-			// Reset flag
-			needStopCommand = false;
-
-			// Clear button state
-			User_ButtonState = BUTTON_IDLE;
-		}
+//		// Check for button press (assuming you have a function or variable to detect single press)
+//		// For example, if you have a buttonPressed flag that's set elsewhere when button is pressed and released
+//		if (User_ButtonState == BUTTON_PRESSED && !needStopCommand) {
+//			// Button pressed, send a random dispense command
+//			dispenseAddressValuePair command;
+//
+//			// Generate a random number between 0 and 2 to select which command to send
+//			static uint32_t randomSeed = 0;
+//			randomSeed++;
+//			uint32_t randomCmd = randomSeed % 3;
+//
+//			switch (randomCmd) {
+//				case 0:
+//					// Hot water command
+//					command.address = 40001;
+//					command.buffer[0] = 0xff00;
+//					command.buffer[1] = 200;
+//					command.size = 2;
+//					break;
+//
+//				case 1:
+//					// Cold water command
+//					command.address = 40004;
+//					command.buffer[0] = 0xff00;
+//					command.buffer[1] = 300;
+//					command.size = 2;
+//					break;
+//
+//				case 2:
+//					// Mixed water command
+//					command.address = 40006;
+//					command.buffer[0] = 0xff00;
+//					command.buffer[1] = 500;
+//					command.buffer[2] = 35;
+//					command.size = 3;
+//					break;
+//			}
+//
+//			// Send command to queue
+//			osMessageQueuePut(myQueue01Handle, &command, 0, 0);
+//
+//			// Set flag to send stop command next
+//			needStopCommand = true;
+//
+//			// Clear button state
+//			User_ButtonState = BUTTON_IDLE;
+//		} else if (User_ButtonState == BUTTON_PRESSED && needStopCommand) {
+//			// Need to send stop command
+//			dispenseAddressValuePair stopCommand = { .address = 40001, .buffer = { 0, 0, 0, 0, 0, 0, 0, 0 }, .size = 8 };
+//
+//			// Send stop command to queue
+//			osMessageQueuePut(myQueue01Handle, &stopCommand, 0, 0);
+//
+//			// Reset flag
+//			needStopCommand = false;
+//
+//			// Clear button state
+//			User_ButtonState = BUTTON_IDLE;
+//		}
 
 		// Periodically check memory
 		MemoryMonitor_Check();
 		osDelay(100);
 	}
-	/* USER CODE END buttonTask */
+  /* USER CODE END buttonTask */
 }
 
 /* Private application code --------------------------------------------------*/
@@ -451,13 +459,9 @@ void sendCheckSetTemp(dispenseAddressValuePair *command) {
 		osDelay(2);
 		ReadModbusData(3, ADD_SET_HOT_WATER_TEMPERATURE, 2); //confirms changes
 
-		/* Update data in the data manager */
-		ModbusDataManager_SetData(SET_HOT_WATER_TEMPERATURE, ModbusDATARX[SET_HOT_WATER_TEMPERATURE]);
-		ModbusDataManager_SetData(SET_COLD_WATER_TEMPERATURE, ModbusDATARX[SET_COLD_WATER_TEMPERATURE]);
-
 		if(command->address == ADD_SET_HOT_WATER_TEMPERATURE) tempAddress = SET_HOT_WATER_TEMPERATURE;
 		else tempAddress = SET_COLD_WATER_TEMPERATURE;
-	} while (ModbusDATARX[tempAddress] != command->buffer[0]); // repeats if change not propagated
+	} while (ModbusDataManager_GetData(tempAddress) != command->buffer[0]); // repeats if change not propagated
 }
 
 /* Memory warning callback */
@@ -531,26 +535,20 @@ void ReadModbusCoils(uint16_t startAddress, uint16_t numCoils) {
 
     if (startAddress == ADD_HOT_WATER_RESET) {
         coilStartIndex = HOT_WATER_RESET;
-//        printf("Reading HOT_WATER_RESET coils, data: 0x%04X\n", tempRegBuffer[0]);
     }
     else if (startAddress == ADD_HOT_WATER_TANK_INLET_SOLENOID_VALVE) {
         coilStartIndex = HOT_WATER_TANK_INLET_SOLENOID_VALVE;
-//        printf("Reading HOT_WATER_TANK_INLET_SOLENOID_VALVE coils, data: 0x%04X\n", tempRegBuffer[0]);
     }
     else if (startAddress == ADD_WATER_FLOW_SWITCH) {
         coilStartIndex = WATER_FLOW_SWITCH;
-//        printf("Reading WATER_FLOW_SWITCH coils, data: 0x%04X\n", tempRegBuffer[0]);
     }
     else if (startAddress == ADD_CUP_DETECTION_1) {
         coilStartIndex = CUP_DETECTION_1;
-//        printf("Reading CUP_DETECTION_1 coils, data: 0x%04X\n", tempRegBuffer[0]);
     }
     else if (startAddress == ADD_UV_ERROR) {
         coilStartIndex = UV_ERROR;
-//        printf("Reading UV_ERROR coils, data: 0x%04X\n", tempRegBuffer[0]);
     }
     else {
-//        printf("Unknown coil address: %u\n", startAddress);
         return;
     }
 
@@ -558,14 +556,9 @@ void ReadModbusCoils(uint16_t startAddress, uint16_t numCoils) {
     bool coilValues[16]; // Maximum 16 coils per register
     uint16_t numCoilsToProcess = (numCoils > 16) ? 16 : numCoils;
 
-    // Debug the raw value before bit extraction
-//    printf("Raw coil register value: 0x%04X\n", tempRegBuffer[0]);
-
     // Extract each bit
     for (int i = 0; i < numCoilsToProcess; i++) {
-        // For debugging, print each bit being extracted
         bool bitValue = bitRead(tempRegBuffer[0], i);
-//        printf("  Bit %d: %d\n", i, bitValue);
         coilValues[i] = bitValue;
     }
 
@@ -627,12 +620,6 @@ void ReadModbusRegisters(uint8_t functionCode, uint16_t startAddress, uint16_t n
         printf("Unknown register address range: %u\n", startAddress);
         return;
     }
-
-    // For debugging, print the registers we received
-//    printf("Read %d registers starting at address %u:\n", numRegisters, startAddress);
-//    for (int i = 0; i < numRegisters; i++) {
-//        printf("  Register[%d] = 0x%04X\n", i, tempRegBuffer[i]);
-//    }
 
     // Update data manager with register values
     ModbusDataManager_UpdateDataBulk(regStartIndex, tempRegBuffer, numRegisters);
@@ -808,3 +795,4 @@ void dispenseLEDState(bool enabled) {
 }
 
 /* USER CODE END Application */
+

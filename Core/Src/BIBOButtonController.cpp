@@ -7,22 +7,22 @@
 
 #include <BIBOButtonController.hpp>
 #include <main.h>
-//#include <touchgfx/hal/HAL.hpp>
+#include <touchgfx/hal/HAL.hpp>
 
-//void BIBOButtonController::init()
-//{
-////	previousState = 0xFF;
-//
-//}
-//
-//bool BIBOButtonController::sample(uint8_t &key){
-//	if(User_ButtonState){
-//		User_ButtonState = 0x00;
-//		key = 0;
-//		return true;
-//	}
-//	return false;
-//}
+void BIBOButtonController::init()
+{
+//	previousState = 0xFF;
+
+}
+
+bool BIBOButtonController::sample(uint8_t &key){
+	if(User_ButtonState){
+		User_ButtonState = 0x00;
+		key = 0;
+		return true;
+	}
+	return false;
+}
 
 /*
  * HAPTIC Drive

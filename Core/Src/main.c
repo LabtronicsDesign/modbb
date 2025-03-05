@@ -1,27 +1,31 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2022 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os2.h"
+#include "app_touchgfx.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <touchgfx/hal/Config.hpp>
+//#include "bibo_bsp_sdram.h"
+#include "bibo_bsp_qspi.h"
 #include "FreeRTOS.h"
 
 #include "Modbus.h"
@@ -38,7 +42,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -85,14 +88,22 @@ SRAM_HandleTypeDef hsram1;
 RTC_TimeTypeDef gTime;
 RTC_DateTypeDef gDate;
 modbusHandler_t ModbusHandler;
-//uint16_t ModbusDATARX[45];  // Adjust the size as needed
-//bool ModbusCoil[31];
 uint32_t startupAction = 0; //initial setup
 
 volatile bool proximityDetect = NO_MOVEMENT;
 volatile uint8_t User_ButtonState = 0;
 volatile uint32_t buttonPressTime = 0;
 volatile bool isButtonHeld = false;
+
+uint16_t framebuffer[1024 * 600 * 2] LOCATION_ATTRIBUTE("frameBufferSection")
+		= { 0 };
+uint8_t ucHeap[configTOTAL_HEAP_SIZE] LOCATION_ATTRIBUTE("heapSection");
+
+/* Definitions for TouchGFXTask */
+osThreadId_t TouchGFXTaskHandle;
+const osThreadAttr_t TouchGFXTask_attributes = { .name = "TouchGFXTask",
+		.stack_size = 4096 * 4, .priority = (osPriority_t) osPriorityLow, };
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,6 +130,7 @@ static void MX_DCACHE1_Init(void);
 static void MX_DCACHE2_Init(void);
 static void MX_RAMCFG_Init(void);
 /* USER CODE BEGIN PFP */
+extern void TouchGFX_Task(void *argument);
 void DRV2605L_WriteRegister8(uint8_t reg, uint8_t val);
 uint8_t DRV2605L_ReadRegister8(uint8_t reg);
 /* USER CODE END PFP */
@@ -141,6 +153,59 @@ int _write(int file, char *ptr, int len)
   errno = EIO;
   return -1;
 }
+
+static uint32_t SetPanelConfig(void) {
+	//here must be hard power on display
+	HAL_Delay(10);
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_DCS_SHORT_PKT_WRITE_P0, 0x01, 0x00)
+			!= HAL_OK)
+		return 1; // SW reset
+	HAL_Delay(120);
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x87, 0x5a)
+			!= HAL_OK)
+		return 2; // Riverdi god code
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0xB0, 0x80)
+			!= HAL_OK)
+		return 3; // Enable VCOM buffer (In the Riverdi GitHub but not in the datasheet)
+	//if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0xB1, 0x08) != HAL_OK) return  4; // BIST pattern 0x08
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0xB2, 0x50)
+			!= HAL_OK)
+		return 5; // 2 lane and Black/White background
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x80, 0x4b)
+			!= HAL_OK)
+		return 6; // Gamma
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x81, 0xff)
+			!= HAL_OK)
+		return 7; // Gamma
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x82, 0x1a)
+			!= HAL_OK)
+		return 8; // Gamma
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x83, 0x88)
+			!= HAL_OK)
+		return 9; // Gamma
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x84, 0x8f)
+			!= HAL_OK)
+		return 10; // Gamma
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x85, 0x35)
+			!= HAL_OK)
+		return 11; // Gamma
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_GEN_SHORT_PKT_WRITE_P2, 0x86, 0xb0)
+			!= HAL_OK)
+		return 12; // Gamma
+	HAL_Delay(50);
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_DCS_SHORT_PKT_WRITE_P0, 0x11, 0x00)
+			!= HAL_OK)
+		return 13; // Exit sleep mode
+	HAL_Delay(120);
+	if (HAL_DSI_ShortWrite(&hdsi, 0, DSI_DCS_SHORT_PKT_WRITE_P0, 0x29, 0x00)
+			!= HAL_OK)
+		return 14; // Set display on
+	HAL_Delay(20);
+
+	/* All setting OK */
+	return 0;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -198,8 +263,13 @@ int main(void)
   MX_DCACHE1_Init();
   MX_DCACHE2_Init();
   MX_RAMCFG_Init();
+  MX_TouchGFX_Init();
+  /* Call PreOsInit function */
+  MX_TouchGFX_PreOSInit();
   /* USER CODE BEGIN 2 */
-
+	/* creation of TouchGFXTask */
+	TouchGFXTaskHandle = osThreadNew(TouchGFX_Task, NULL,
+			&TouchGFXTask_attributes);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -215,12 +285,11 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -562,7 +631,13 @@ static void MX_DSIHOST_DSI_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN DSIHOST_Init 2 */
-
+	// Start DSI
+	if (HAL_DSI_Start(&hdsi) != HAL_OK) {
+		Error_Handler();
+	}
+	if (SetPanelConfig()) {
+		Error_Handler();
+	}
   /* USER CODE END DSIHOST_Init 2 */
 
 }
@@ -611,31 +686,31 @@ static void MX_I2C1_Init(void)
   }
   /* USER CODE BEGIN I2C1_Init 2 */
   // DRV2605L initialization steps for Maximum Power in LRA mode
-    DRV2605L_WriteRegister8(DRV2605L_REG_MODE, 0x00); // Set Mode to out of standby
-    DRV2605L_WriteRegister8(DRV2605L_REG_RTPIN, 0x00); // No real-time playback
+  DRV2605L_WriteRegister8(DRV2605L_REG_MODE, 0x00); // Set Mode to out of standby
+  DRV2605L_WriteRegister8(DRV2605L_REG_RTPIN, 0x00); // No real-time playback
 
-    // Set Overdrive and Sustain to maximum values
-    DRV2605L_WriteRegister8(DRV2605L_REG_OVERDRIVE, 0xFF); // Maximum overdrive
-    DRV2605L_WriteRegister8(DRV2605L_REG_SUSTAINPOS, 0xFF); // Maximum positive sustain
-    DRV2605L_WriteRegister8(DRV2605L_REG_SUSTAINNEG, 0xFF); // Maximum negative sustain
-    DRV2605L_WriteRegister8(DRV2605L_REG_BREAK, 0x7F);      // High brake value for quick response
+  // Set Overdrive and Sustain to maximum values
+  DRV2605L_WriteRegister8(DRV2605L_REG_OVERDRIVE, 0xFF); // Maximum overdrive
+  DRV2605L_WriteRegister8(DRV2605L_REG_SUSTAINPOS, 0xFF); // Maximum positive sustain
+  DRV2605L_WriteRegister8(DRV2605L_REG_SUSTAINNEG, 0xFF); // Maximum negative sustain
+  DRV2605L_WriteRegister8(DRV2605L_REG_BREAK, 0x7F);      // High brake value for quick response
 
-    // Set the waveform sequence with the most powerful effect
-    DRV2605L_WriteRegister8(DRV2605L_REG_WAVESEQ1, 1); // Strong click effect (Effect ID 1)
-    DRV2605L_WriteRegister8(DRV2605L_REG_WAVESEQ2, 0); // End sequence
+  // Set the waveform sequence with the most powerful effect
+  DRV2605L_WriteRegister8(DRV2605L_REG_WAVESEQ1, 1); // Strong click effect (Effect ID 1)
+  DRV2605L_WriteRegister8(DRV2605L_REG_WAVESEQ2, 0); // End sequence
 
-    // Set the maximum drive
-    DRV2605L_WriteRegister8(DRV2605L_REG_AUDIOMAX, 0xFF); // Maximum audio-to-haptic conversion (maximum drive strength)
+  // Set the maximum drive
+  DRV2605L_WriteRegister8(DRV2605L_REG_AUDIOMAX, 0xFF); // Maximum audio-to-haptic conversion (maximum drive strength)
 
-    // Configure LRA mode
-    uint8_t feedback = DRV2605L_ReadRegister8(DRV2605L_REG_FEEDBACK);
-    feedback |= 0x80;  // Set bit 7 for LRA
-    DRV2605L_WriteRegister8(DRV2605L_REG_FEEDBACK, feedback);
+  // Configure LRA mode
+  uint8_t feedback = DRV2605L_ReadRegister8(DRV2605L_REG_FEEDBACK);
+  feedback |= 0x80;  // Set bit 7 for LRA
+  DRV2605L_WriteRegister8(DRV2605L_REG_FEEDBACK, feedback);
 
-    // Set control for closed-loop operation (control3 register)
-    uint8_t control3 = DRV2605L_ReadRegister8(DRV2605L_REG_CONTROL3);
-    control3 &= ~(0x20); // Clear ERM_OPEN_LOOP (bit 5) for closed-loop LRA
-    DRV2605L_WriteRegister8(DRV2605L_REG_CONTROL3, control3);
+  // Set control for closed-loop operation (control3 register)
+  uint8_t control3 = DRV2605L_ReadRegister8(DRV2605L_REG_CONTROL3);
+  control3 &= ~(0x20); // Clear ERM_OPEN_LOOP (bit 5) for closed-loop LRA
+  DRV2605L_WriteRegister8(DRV2605L_REG_CONTROL3, control3);
   /* USER CODE END I2C1_Init 2 */
 
 }
@@ -835,7 +910,21 @@ static void MX_OCTOSPI1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN OCTOSPI1_Init 2 */
+	if (QSPI_ResetMemory(&hospi1) != HAL_OK) {
+		Error_Handler();
+	}
 
+	if (QSPI_Enable32BitAddressMode(&hospi1) != HAL_OK) {
+		Error_Handler();
+	}
+
+	if (QSPI_EnableQuadMode(&hospi1) != HAL_OK) {
+		Error_Handler();
+	}
+
+	if (QSPI_EnableMemoryMappedMode(&hospi1) != HAL_OK) {
+		Error_Handler();
+	}
   /* USER CODE END OCTOSPI1_Init 2 */
 
 }
@@ -975,10 +1064,10 @@ static void MX_RTC_Init(void)
 
   /* USER CODE BEGIN Check_RTC_BKUP */
   /* Read the Back Up Register 1 Data */
-    	if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0xB1B0) {
-    		// Clear Backup registor : recover to current RTC information
+  	if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR0) != 0xB1B0) {
+  		// Clear Backup registor : recover to current RTC information
 
-    		// Set to Time/Date from current Time/Date
+  		// Set to Time/Date from current Time/Date
   /* USER CODE END Check_RTC_BKUP */
 
   /** Initialize RTC and set the Time and Date
@@ -1004,14 +1093,14 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 2 */
   /*##-1- Check if Data stored in BackUp register1: No Need to reconfigure RTC#*/
 
-    		// Write a data in ad RTC Backup data register
-    		HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0xB1B0);
-    	} else {
-    		// Only read time and date
-    		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
-    		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+  		// Write a data in ad RTC Backup data register
+  		HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR0, 0xB1B0);
+  	} else {
+  		// Only read time and date
+  		HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+  		HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
 
-    	}
+  	}
   /* USER CODE END RTC_Init 2 */
 
 }
@@ -1222,7 +1311,7 @@ static void MX_FMC_Init(void)
   }
 
   /* USER CODE BEGIN FMC_Init 2 */
-
+//  bibo_bsp_sdram_initialization_sequence();
   /* USER CODE END FMC_Init 2 */
 }
 
@@ -1310,8 +1399,8 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
   HAL_GPIO_WritePin(LED_EXT_GPIO_Port, LED_EXT_Pin, GPIO_PIN_RESET); //reset is ON
-  HAL_GPIO_WritePin(LCD_BCKLT_GPIO_Port, LCD_BCKLT_Pin, GPIO_PIN_RESET); //OFF
-  HAL_GPIO_WritePin(LCD_STBY_GPIO_Port, LCD_STBY_Pin, GPIO_PIN_RESET); //OFF
+  HAL_GPIO_WritePin(LCD_BCKLT_GPIO_Port, LCD_BCKLT_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LCD_STBY_GPIO_Port, LCD_STBY_Pin, GPIO_PIN_SET);
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
@@ -1521,11 +1610,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
+    __disable_irq();
+    printf("Error occurred\n"); // Basic message
+//    while (1);
+//    __BKPT();
+	NVIC_SystemReset(); // Trigger a soft reset
+}
+void Error_Handler_with_info(const char *file, int line)
+{
   __disable_irq();
-  while (1)
-  {
-  }
+  printf("Error in file: %s at line: %d\n", file, line);  // Send the info to a debugger or serial output
+//  while (1);
+//  __BKPT();
+  NVIC_SystemReset(); // Trigger a soft reset
   /* USER CODE END Error_Handler_Debug */
 }
 
